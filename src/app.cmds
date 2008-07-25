@@ -1,0 +1,54 @@
+/******************************************************************************
+ * Copyright (c) 2007-2008 Reed A. Cartwright, PhD <reed@scit.us>             *
+ *                                                                            *
+ * Permission is hereby granted, free of charge, to any person obtaining a    *
+ * copy of this software and associated documentation files (the "Software"), *
+ * to deal in the Software without restriction, including without limitation  *
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,   *
+ * and/or sell copies of the Software, and to permit persons to whom the      *
+ * Software is furnished to do so, subject to the following conditions:       *
+ *                                                                            *
+ * The above copyright notice and this permission notice shall be included in *
+ * all copies or substantial portions of the Software.                        *
+ *                                                                            *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
+ * DEALINGS IN THE SOFTWARE.                                                  *
+ ******************************************************************************/
+
+#include "xm.h"
+
+/******************************************************************************
+ * X-Macro List                                                               *
+ *                                                                            *
+ * XCMD(lname, sname, desc, type, def)                                        *
+ *    lname: long name, e.g. (read)(args)  =>  --read-args=foo.bar            *
+ *    sname: short name, e.g. (f)  => -f foo.bar                              *
+ *    desc:  description                                                      *
+ *    type:  c++ variable type                                                *
+ *    def:   default value                                                    *
+ ******************************************************************************/
+
+XCMD((size),           (n), "habitat length", unsigned int, 50)
+XCMD((markers),        (m), "number of markers", unsigned int, 1)
+XCMD((ini)(num),       (k), "initial number of alleles", unsigned int, 0)
+XCMD((mu),             (u), "mutation rate", double, 1e-5)
+XCMD((seed),           (s), "seed dispersal", double, 0)
+XCMD((pollen),         (p), "pollen dispersal", double, 0)
+XCMD((compat),         (c), "compatability system", sstring, sstring("psi"))
+XCMD((time),           (t), "time to run simulation (in 2N generations)", double, 100)
+XCMD((output),         (o), "the name of the output files", sstring, sstring(""))
+XCMD((rand)(seed),     (z), "the random seed", unsigned int, 0)
+XCMD((help),           (h), "display help message", bool, false)
+XCMD((version),        (v), "display version information", bool, false)
+XCMD((read)(args),        , "read arguments from file", sstring, sstring(""))
+
+/******************************************************************************
+ * Cleanup                                                                    *
+ ******************************************************************************/
+
+#include "xm.h"
