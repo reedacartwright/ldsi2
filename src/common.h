@@ -57,7 +57,7 @@ template<typename Tp, typename CharT, typename Traits>
 basic_ostream<CharT, Traits>&
 operator<<(basic_ostream<CharT, Traits>& os, const std::vector<Tp> &v)
 {
-	return racware::join(",", v);
+	return os << racware::join(",", v);
 }
 } // namespace std
 

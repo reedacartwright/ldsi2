@@ -24,23 +24,35 @@
 class population;
 class individual;
 
+//typedef size_t gene;
+
 struct gene {
-	gene() : allele(-1), soff(0), poff(0) { }
-	size_t allele;
-	size_t soff;
-	size_t poff;
+	gene() : a((size_t)-1), par((size_t)-1), gpar((size_t)-1) { }
+	// true info
+	size_t a;
+	// meta info;
+	size_t par;
+	size_t gpar;
+
+	bool operator == (const gene & g) const {
+		return a == g.a;
+	}
+	bool operator != (const gene & g) const {
+		return a != g.a;
+	}
+	bool operator < (const gene & g) const {
+		return a < g.a;
+	}
+	
+	gene & operator = (size_t u) {
+		a = u;
+		return *this;
+	}
+
+	operator size_t() const {
+		return a;
+	}
 };
-
-namespace std {
-
-template<typename CharT, typename Traits>
-basic_ostream<CharT, Traits>&
-operator<<(basic_ostream<CharT, Traits>& os, const gene &g)
-{
-	os << g.allele;
-	return os;
-}
-} // namespace std
 
 typedef std::vector<gene> haplotype;
 typedef std::pair<size_t,size_t> location;
@@ -53,6 +65,8 @@ public:
 	
 	gamete_info gamete(haplotype & h) const;
 	
+	size_t id;
+
 	haplotype hdad;
 	haplotype hmom;
 	
@@ -68,6 +82,10 @@ public:
 
 	void initialize(size_t w, size_t h, size_t m, size_t k);
 	void params(double u, double s, double p, size_t c);
+	inline void stat_params(size_t x, size_t y) {
+		sample_size = x;
+		sample_gen = y;
+	}
 	void evolve(size_t g=1);
 	void step(size_t x, size_t y);
 
@@ -90,7 +108,7 @@ public:
 	inline bool is_valid(const individual &m, const haplotype &h) const {
 		switch(compat) {
 		case GSI:
-			return (h[0].allele != m.hdad[0].allele && h[0].allele != m.hmom[0].allele);
+			return (h[0] != m.hdad[0] && h[0] != m.hmom[0]);
 		case SSI:
 			return true; //optimization because is_valid(mom,dad) has already been called
 		case NSI:
@@ -103,15 +121,15 @@ public:
 	inline bool is_valid(const individual &m, const individual &d) const {
 		switch(compat) {
 		case GSI:
-			return (d.hdad[0].allele != m.hdad[0].allele &&
-			        d.hdad[0].allele != m.hmom[0].allele)||
-			       (d.hmom[0].allele != m.hdad[0].allele &&
-			       d.hmom[0].allele != m.hmom[0].allele); 
+			return (d.hdad[0] != m.hdad[0] &&
+			        d.hdad[0] != m.hmom[0])||
+			       (d.hmom[0] != m.hdad[0] &&
+			        d.hmom[0] != m.hmom[0]); 
 		case SSI:
-			return (d.hdad[0].allele != m.hdad[0].allele &&
-			        d.hdad[0].allele != m.hmom[0].allele)&&
-			       (d.hmom[0].allele != m.hdad[0].allele &&
-			       d.hmom[0].allele != m.hmom[0].allele); 
+			return (d.hdad[0] != m.hdad[0] &&
+			        d.hdad[0] != m.hmom[0])&&
+			       (d.hmom[0] != m.hdad[0] &&
+			        d.hmom[0] != m.hmom[0]); 
 		case NSI:
 		case PSI:
 		default:
@@ -140,5 +158,7 @@ protected:
 	size_t mallele;
 	double pmut;
 	size_t gmut;
+	size_t sample_gen;
+	size_t sample_size;
 };
 #endif

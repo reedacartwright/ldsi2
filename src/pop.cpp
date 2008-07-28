@@ -17,6 +17,8 @@
 
 // src/ldsi -n 10 -m 4 -k 6 -u 1e-4 -p 2 -s 1 -c ssi -t 10
 
+#define _USE_MATH_DEFINES
+
 #include "common.h"
 #include "pop.h"
 #include "join.h"
@@ -26,6 +28,7 @@
 #include <cmath>
 #include <cfloat>
 #include <utility>
+#include <algorithm>
 #include <map>
 #include <boost/foreach.hpp>
 
@@ -70,13 +73,29 @@ public:
 		n.resize(p.size(), 0);
 		gsl_ran_multinomial(r, p.size(), N, &p[0], &n[0]);
 	}
-	
+
+	// assumes n < max/2 for effeciency
+	inline void uniform_urn(int_type max, int_type n, std::vector<int_type> &u) {
+		u.assign(max,max);
+		for(int_type i=0;i<n && i < max;++i)
+		{
+			int_type r = uniform(max-i);
+			int_type t = (u[i] == max) ? i : u[i];
+			u[i] = (u[i+r] == max) ? i+r : u[i+r];
+			u[i+r] = t;
+		}
+		u.erase(u.begin()+n, u.end());
+	}
+
+
+
 private:
 	const gsl_rng_type *T;
 	gsl_rng *r;
 } myrand;
 
 void set_rand_seed(unsigned int u) { myrand.seed(u); }
+
 
 /****************************************************************************
  * class population                                                         *
@@ -93,6 +112,7 @@ void population::initialize(size_t w, size_t h, size_t m, size_t k)
 	inds.reserve(width*height);
 	individual I(markers);
 	for(size_t i=0;i<width*height;++i) {
+		I.id = 2*i;
 		I.randomize(k);
 		inds.push_back(I);
 		I.randomize(k);
@@ -122,15 +142,13 @@ inline location dispersal(size_t x, size_t y, double mu) {
 	double t = 2.0*M_PI*myrand.uniform01();
 	double r = myrand.exponential(mu);
 	return location(
-		(size_t)((int)floor(t*cos(r)+0.5+x)),
-		(size_t)((int)floor(t*sin(r)+0.5+y))
+		(size_t)((int)floor(r*cos(t)+0.5+x)),
+		(size_t)((int)floor(r*sin(t)+0.5+y))
 	);
 }
 
 void population::step(size_t x, size_t y) {
-	//pick a random position to replace
-	haplotype hd,hm;
-	gamete_info gid, gim;
+	individual &off = get_buf(x,y);
 	while(1) {
 		// pick a compatible pair
 		location momloc = dispersal(x,y,seed);
@@ -147,41 +165,13 @@ void population::step(size_t x, size_t y) {
 		if(!is_valid(mom,dad))
 			continue;
 		// generate pollen and check compatibility
-		gid = dad.gamete(hd);
-		mutate(hd);
-		if(!is_valid(mom,hd))
+		dad.gamete(off.hdad);
+		mutate(off.hdad);
+		if(!is_valid(mom,off.hdad))
 			continue;
-		gim = mom.gamete(hm);
-		mutate(hm);
+		mom.gamete(off.hmom);
+		mutate(off.hmom);
 		
-		individual &off = get_buf(x,y);
-		// update offspring counts in parents
-		size_t u;
-		if(gid.first == 0) {
-			for(u=0;u<gid.second;++u)
-				dad.hdad[u].poff++;
-			for(;u<dad.hmom.size();++u)
-				dad.hmom[u].poff++;
-		} else {
-			for(u=0;u<gid.second;++u)
-				dad.hmom[u].poff++;
-			for(;u<dad.hdad.size();++u)
-				dad.hdad[u].poff++;		
-		}
-		if(gim.first == 0) {
-			for(u=0;u<gim.second;++u)
-				mom.hdad[u].soff++;
-			for(;u<mom.hmom.size();++u)
-				mom.hmom[u].soff++;
-		} else {
-			for(u=0;u<gim.second;++u)
-				mom.hmom[u].soff++;
-			for(;u<mom.hdad.size();++u)
-				mom.hdad[u].soff++;		
-		}
-		// set new genome and stats; should already be zeroed
-		std::swap(off.hdad,hd);
-		std::swap(off.hmom,hm);
 		// set parent locations
 		off.pdad = dadloc;
 		off.pmom = momloc;
@@ -194,23 +184,21 @@ void population::mutate(haplotype &h)
 {
 	if(--gmut > 0)
 		return;
-	size_t pos = myrand.uniform(h.size());
-	h[pos].allele = mallele++;
 	gmut = myrand.geometric(pmut);
+	size_t pos = myrand.uniform(h.size());
+	h[pos] = mallele++;
 }
 
+
 struct popstats {
-	popstats() :
-		num_pollen2(0.0),num_seed2(0.0), num_off2(0.0), num_allele(),
-		num_homo(0.0)
-		{ }
-	
-	double num_pollen2;
-	double num_seed2;
-	double num_off2;
-	typedef map<size_t,double> alleledb;
+	typedef map<size_t,size_t> alleledb;
 	alleledb num_allele;
-	double num_homo;
+	size_t num_homo;
+	size_t num_ibd;
+	size_t sum_dist2;
+
+	popstats() : num_allele(), num_homo(0), num_ibd(0), sum_dist2(0)
+		{ }
 };
 
 template<typename T>
@@ -221,81 +209,46 @@ inline T sq(const T& t) {
 void population::printstats() const
 {
 	// per locus:
-	//   var fec - effective population size (components)
 	//   number of alleles
 	//   effective number of alleles
-	//   conditional inbreeding
-	//   r^2 to s
 	//   true IBD?  over two generations?
 	// per ind:
 	//   s^2
-	popstats stats;
-	double M = 2.0*get_height()*get_width();
-	double Mh = get_height()*get_width();	
-	size_t U = 1;
-	for(size_t y = 0; y < get_height(); ++y)
+	size_t uM = get_height()*get_width();
+	double M = 2.0*sample_size;
+
+	vector<size_t> v;
+	myrand.uniform_urn(uM, sample_size, v);
+	for(size_t m = 0; m < markers; ++m)
 	{
-		for(size_t x = 0; x < get_width(); ++x)
+		popstats stats;
+		foreach(size_t p, v)
 		{
-			const individual &I = get_buf(x,y);
-			stats.num_seed2   += sq(I.hmom[0].soff) + sq(I.hdad[0].soff);
-			stats.num_pollen2 += sq(I.hmom[0].poff) + sq(I.hdad[0].poff);
-			stats.num_off2    += sq(I.hmom[0].soff+I.hmom[0].poff)
-			                   + sq(I.hdad[0].soff+I.hdad[0].poff);
-			stats.num_allele[I.hmom[0].allele] += 1.0;
-			stats.num_allele[I.hdad[0].allele] += 1.0;
-			if(I.hmom[0].allele == I.hdad[0].allele)
-				stats.num_homo += 1.0;
+			size_t x = p%get_width();
+			size_t y = p/get_width();
+			const individual &I = get(x,y);
+			stats.num_allele[I.hmom[m]] += 1;
+			stats.num_allele[I.hdad[m]] += 1;
+			if(I.hmom[m] == I.hdad[m])
+				stats.num_homo += 1;
+			if(I.hmom[m].gpar == I.hdad[m].gpar)
+				stats.num_ibd += 1;
+			if(m == 0)
+			{
+				stats.sum_dist2 += sq(I.pdad.first-x)+sq(I.pdad.second-y);
+				stats.sum_dist2 += sq(I.pmom.first-x)+sq(I.pmom.second-y);
+			}
 		}
-	}
-	double dt = 0.0;
-	for(popstats::alleledb::iterator it = stats.num_allele.begin();
-		it != stats.num_allele.end(); ++it)
-	{
-		dt += sq(it->second/M);
-	}
-	
-	cout << join("\t",
-		stats.num_off2/M - 1.0,
-		stats.num_pollen2/M - 0.25,
-		stats.num_seed2/M - 0.25,
-		1.0/dt, stats.num_allele.size(),
-		stats.num_homo/Mh,
-		(stats.num_homo/Mh - dt) / (1.0 - dt),
-		(stats.num_homo/Mh - dt) / (- dt)
-	) << endl;
-	
-	stats = popstats();
-	for(size_t y = 0; y < get_height(); ++y)
-	{
-		for(size_t x = 0; x < get_width(); ++x)
-		{
-			const individual &I = get_buf(x,y);
-			stats.num_seed2   += sq(I.hmom[U].soff) + sq(I.hdad[U].soff);
-			stats.num_pollen2 += sq(I.hmom[U].poff) + sq(I.hdad[U].poff);
-			stats.num_off2    += sq(I.hmom[U].soff+I.hmom[U].poff)
-			                   + sq(I.hdad[U].soff+I.hdad[U].poff);
-			stats.num_allele[I.hmom[U].allele] += 1.0;
-			stats.num_allele[I.hdad[U].allele] += 1.0;
-			if(I.hmom[0].allele == I.hdad[0].allele)
-				stats.num_homo += 1.0;			
+		size_t dt = 0;
+		foreach(popstats::alleledb::value_type &vv, stats.num_allele) {
+			dt += sq(vv.second);
 		}
+		
+		cout << join("\t", m, dt/(M*M), stats.num_homo/(1.0*sample_size), stats.num_ibd/(1.0*sample_size),
+			M*M/dt, stats.num_allele.size(),
+			0.5*stats.sum_dist2/M
+		) << endl;
 	}
-	dt = 0.0;
-	for(popstats::alleledb::iterator it = stats.num_allele.begin();
-		it != stats.num_allele.end(); ++it)
-	{
-		dt += sq(it->second/M);
-	}
-	cout << join("\t",
-		stats.num_off2/M - 1.0,
-		stats.num_pollen2/M - 0.25,
-		stats.num_seed2/M - 0.25,
-		1.0/dt, stats.num_allele.size(),
-		stats.num_homo/Mh,
-		(stats.num_homo/Mh - dt) / (1.0 - dt),
-		(stats.num_homo/Mh - dt) / (- dt)
-	) << endl;
 }
 
 /****************************************************************************
@@ -304,11 +257,10 @@ void population::printstats() const
  
 individual::individual(size_t m, size_t k) {
 	gene g;
-	g.allele = myrand.uniform(k);
+	g = myrand.uniform(k);
 	hdad.assign(m,g);
-	g.allele = myrand.uniform(k);
+	g = myrand.uniform(k);
 	hmom.assign(m,g);
-	g.allele = -1;
 	
 	pdad = make_pair(-1,-1);
 	pmom = pdad;
@@ -316,16 +268,16 @@ individual::individual(size_t m, size_t k) {
 
 void individual::randomize(size_t k) {
 	gene g;
-	g.allele = myrand.uniform(k);
+	g = myrand.uniform(k);
 	fill(hdad.begin(), hdad.end(), g);
-	g.allele = myrand.uniform(k);
+	g = myrand.uniform(k);
 	fill(hmom.begin(), hmom.end(), g);
 }
 
 gamete_info individual::gamete(haplotype & h) const {
-
 	unsigned int r = myrand.uniform();
 	unsigned int w = r & 1; // start with which haplotype
+	unsigned int rw = (w+1)&1; //other haplotype
 	r >>= 1;
 	unsigned int p = 0;
 	while(r & 1) {
@@ -334,21 +286,18 @@ gamete_info individual::gamete(haplotype & h) const {
 	}
 	unsigned int m = hdad.size();
 	p = (p >= m) ? 1 : m-p;
-	if(w == 0)
-	{
-		h.assign(hdad.begin(), hdad.begin()+p);
-		if(p != m)
-			h.insert(h.end(), hmom.begin()+p, hmom.end());
+	const haplotype *g[2] = { &hdad, &hmom};
+	h.assign(g[w]->begin(), g[w]->begin()+p);
+	if(p != m)
+		h.insert(h.end(), g[rw]->begin()+p, g[rw]->end());
+	size_t ii;
+	for(ii=0;ii<p;++ii) {
+		h[ii].gpar = h[ii].par;
+		h[ii].par = id+w;
 	}
-	else
-	{
-		h.assign(hmom.begin(), hmom.begin()+p);
-		if(p != m)
-			h.insert(h.end(), hdad.begin()+p, hdad.end());
-	}
-	foreach(gene &g, h) {
-		g.soff = 0;
-		g.poff = 0;
+	for(;ii<m;++ii) {
+		h[ii].gpar = h[ii].par;
+		h[ii].par = id+rw;
 	}
 	return make_pair(w,p);
 }

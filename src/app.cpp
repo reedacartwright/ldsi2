@@ -33,8 +33,11 @@
 using namespace racware;
 using namespace std;
 
+void test();
+
 int main(int argc, char *argv[])
 {
+
 	int ret = EXIT_FAILURE;
 	try {
 		app app(argc, argv);
@@ -96,7 +99,7 @@ app::app(int argc, char* argv[]) : desc("Allowed Options")
 }
 
 // must be the same as the enum in population
-const char *sikeys[] = {"psi","nsi","gsi","ssi"};
+const char *sikeys[] = {"nsi","psi","gsi","ssi"};
 
 int app::run()
 {
@@ -116,7 +119,7 @@ int app::run()
 		arg.rand_seed = rand_seed();
 	set_rand_seed(arg.rand_seed);
 	std::cerr << "Simulating with seed " << arg.rand_seed << endl;
-	
+
 	size_t ckey = key_switch(arg.compat.c_str(), sikeys);
 	if(ckey == (size_t)-1)
 	{
@@ -127,7 +130,8 @@ int app::run()
 	population pop;
 	pop.initialize(arg.size, arg.size, arg.markers, arg.ini_num);
 	pop.params(arg.mu, arg.seed, arg.pollen, ckey);
-	pop.evolve(arg.time*2.0*arg.size*arg.size);
+	pop.stat_params(arg.sample, arg.step);
+	pop.evolve(static_cast<size_t>(arg.time*2.0*arg.size*arg.size));
 	pop.printstats();
 	
 	

@@ -34,6 +34,8 @@
  ******************************************************************************/
 
 XCMD((size),           (n), "habitat length", unsigned int, 50)
+XCMD((sample),         (x), "sample size", unsigned int, 100)
+XCMD((step),           (y), "sample gen step", unsigned int, 1000)
 XCMD((markers),        (m), "number of markers", unsigned int, 1)
 XCMD((ini)(num),       (k), "initial number of alleles", unsigned int, 0)
 XCMD((mu),             (u), "mutation rate", double, 1e-5)
