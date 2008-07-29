@@ -303,7 +303,6 @@ gamete_info individual::gamete(haplotype & h) const {
 		h[ii].gpar = h[ii].par;
 		h[ii].par = id+rw;
 	}
-	cerr << "HERE" << "\t" << w << "\t" << p << endl;
 	return make_pair(w,p);
 }
 
