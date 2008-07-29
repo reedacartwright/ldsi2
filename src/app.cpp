@@ -131,22 +131,7 @@ int app::run()
 	pop.initialize(arg.size, arg.size, arg.markers, arg.ini_num);
 	pop.params(arg.mu, arg.seed, arg.pollen, ckey);
 	pop.stat_params(arg.sample, arg.step);
-	pop.evolve(static_cast<size_t>(arg.time*2.0*arg.size*arg.size));
-	pop.printstats();
-	
-	
-	/*for(size_t y = 0; y < pop.get_height(); ++y)
-	{
-		for(size_t x = 0; x < pop.get_width(); ++x)
-		{
-			const individual &I = pop.get(x,y);
-			cout << join("/", I.hdad) << "\t" << join("/", I.hmom);
-			if(x+1 < pop.get_width())
-				cout << "\t";
-		}
-		cout << endl;
-	}
-	*/
+	pop.evolve(static_cast<size_t>(arg.time*2.0*arg.size*arg.size+1.0));
 	
 	return EXIT_SUCCESS;
 }

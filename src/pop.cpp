@@ -135,6 +135,8 @@ void population::evolve(size_t g) {
 		}
 		// swap is faster than copy
 		std::swap(inds_buf, inds);
+		if(gg%sample_gen == 0)
+			printstats(gg);
 	}
 }
 
@@ -206,7 +208,7 @@ inline T sq(const T& t) {
 	return t*t;
 }
 
-void population::printstats() const
+void population::printstats(size_t g) const
 {
 	// per locus:
 	//   number of alleles
@@ -244,7 +246,9 @@ void population::printstats() const
 			dt += sq(vv.second);
 		}
 		
-		cout << join("\t", m, dt/(M*M), stats.num_homo/(1.0*sample_size), stats.num_ibd/(1.0*sample_size),
+		cout << join("\t", g, m, dt/(M*M),
+			stats.num_homo/(1.0*sample_size),
+			stats.num_ibd/(1.0*sample_size),
 			M*M/dt, stats.num_allele.size(),
 			0.5*stats.sum_dist2/M
 		) << endl;
@@ -286,7 +290,7 @@ gamete_info individual::gamete(haplotype & h) const {
 	}
 	unsigned int m = hdad.size();
 	p = (p >= m) ? 1 : m-p;
-	const haplotype *g[2] = { &hdad, &hmom};
+	const haplotype *g[2] = {&hdad, &hmom};
 	h.assign(g[w]->begin(), g[w]->begin()+p);
 	if(p != m)
 		h.insert(h.end(), g[rw]->begin()+p, g[rw]->end());
@@ -299,6 +303,7 @@ gamete_info individual::gamete(haplotype & h) const {
 		h[ii].gpar = h[ii].par;
 		h[ii].par = id+rw;
 	}
+	cerr << "HERE" << "\t" << w << "\t" << p << endl;
 	return make_pair(w,p);
 }
 

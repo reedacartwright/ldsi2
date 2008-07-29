@@ -143,7 +143,7 @@ public:
 	inline size_t get_width() const { return width; }
 	inline size_t get_height() const { return height; }
 	
-	void printstats() const;
+	void printstats(size_t g) const;
 	
 protected:
 	indy_vec inds;
