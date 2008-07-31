@@ -103,6 +103,8 @@ void set_rand_seed(unsigned int u) { myrand.seed(u); }
  * class population                                                         *
  ****************************************************************************/
 
+enum {sN, sIbd, sKo, sF, sS2, sSize};
+
 void population::initialize(size_t w, size_t h, size_t m, size_t k)
 {
 	if(k < 1) k = 1;
@@ -129,7 +131,7 @@ void population::params(double u, double s, double p, size_t c) {
 }
 
 void population::evolve(size_t g, size_t b) {
-	print_stats_header();
+	//cerr << "Burnin phase of " << b << " generations..." << endl;
 	for(size_t gg=0;gg<b;++gg) {
 		for(size_t y=0;y<height;++y) {
 			for(size_t x=0;x<width;++x) {
@@ -139,6 +141,9 @@ void population::evolve(size_t g, size_t b) {
 		// swap is faster than copy
 		std::swap(inds_buf, inds);
 	}
+	//cerr << "Collection phase of " << g << " generations..." << endl;
+	print_stats_header();
+	sum_stats.assign(markers*sSize, 0.0);
 	for(size_t gg=0;gg<g;++gg) {
 		for(size_t y=0;y<height;++y) {
 			for(size_t x=0;x<width;++x) {
@@ -150,6 +155,7 @@ void population::evolve(size_t g, size_t b) {
 		if(gg%sample_gen == 0)
 			print_stats(b+gg);
 	}
+	print_stats_avg();
 }
 
 inline location dispersal(size_t x, size_t y, double mu) {
@@ -203,18 +209,6 @@ void population::mutate(haplotype &h)
 	size_t pos = myrand.uniform(h.size());
 	h[pos] = mallele++;
 }
-
-
-struct popstats {
-	typedef map<size_t,size_t> alleledb;
-	alleledb num_allele;
-	size_t num_homo;
-	size_t num_ibd;
-	size_t sum_dist2;
-
-	popstats() : num_allele(), num_homo(0), num_ibd(0), sum_dist2(0)
-		{ }
-};
 
 template<typename T>
 inline T sq(const T& t) {
@@ -300,7 +294,18 @@ Calculated from Fisher's Information
 
 */
 
-void population::print_stats(size_t g) const
+struct popstats {
+	typedef std::map<size_t,size_t> alleledb;
+	alleledb num_allele;
+	size_t num_homo;
+	size_t num_ibd;
+	size_t sum_dist2;
+
+	popstats() : num_allele(), num_homo(0), num_ibd(0), sum_dist2(0)
+		{ }
+};
+
+void population::print_stats(size_t g)
 {
 	// per locus:
 	//   number of alleles
@@ -341,8 +346,9 @@ void population::print_stats(size_t g) const
 		}
 		if(m == 0)
 			s2 = 0.5*stats.sum_dist2/M;
-
-		double Ke = M*M/dt;
+		double ibd = stats.num_ibd/(1.0*sample_size);
+		double f = dt/sq(M);
+		double Ke = 1.0/f;
 		double theta_ke = Ke-1.0;
 		double N_ke = 0.25*theta_ke/mu;
 		double Nb_ke = 4.0*M_PI*s2*N_ke/(uM);
@@ -353,13 +359,62 @@ void population::print_stats(size_t g) const
 		double theta_ko = ts(Ke-0.9);
 		double N_ko = 0.25*theta_ko/mu;
 		double Nb_ko = 4.0*M_PI*s2*N_ko/(uM);	
+				
+		cout << join("\t", g, m, ibd, Ko, Ke, s2) 
+		     << "\t" << join("\t", theta_ko, N_ko, Nb_ko)
+	         << "\t" << join("\t", theta_ke, N_ke, Nb_ke)
+		     << endl;
+		
+		size_t o = m*sSize;
+		sum_stats[o+sN]   += 1.0;
+		sum_stats[o+sIbd] += ibd;
+		sum_stats[o+sKo]  += Ko;
+		sum_stats[o+sF]  += f;
+		sum_stats[o+sS2]  += s2;
+	}
+}
 
-		cout << join("\t", g, m, stats.num_ibd/(1.0*sample_size), Ko, Ke, s2) 
+//enum {sN, sIbd, sKo, sKe, sS2, sSize}
+
+void population::print_stats_avg() const
+{
+	// parameter ests will be f(avg(a)) not avg(f(a))
+	size_t uM = get_height()*get_width();
+	double M = 2.0*sample_size;
+		
+	for(size_t m = 0; m < markers; ++m)
+	{
+		size_t o = m*sSize;
+		double N = sum_stats[o+sN];
+		
+		double s2 = sum_stats[o+sS2]/N;
+		double ibd = sum_stats[o+sIbd]/N;
+		double f = sum_stats[o+sF]/N;
+		double Ke = 1.0/f;
+		double theta_ke = Ke-1.0;
+		double N_ke = 0.25*theta_ke/mu;
+		double Nb_ke = 4.0*M_PI*s2*N_ke/(uM);
+		
+		double Ko = sum_stats[o+sKo]/N;;
+		theta_kn_solver ts(Ko, M);
+		// could fail to converged, ignore--tehe.
+		double theta_ko = ts(Ke-0.9);
+		double N_ko = 0.25*theta_ko/mu;
+		double Nb_ko = 4.0*M_PI*s2*N_ko/(uM);	
+				
+		cout << join("\t", "Avg", m, ibd, Ko, Ke, s2) 
 		     << "\t" << join("\t", theta_ko, N_ko, Nb_ko)
 	         << "\t" << join("\t", theta_ke, N_ke, Nb_ke)
 		     << endl;
 	}
+	
 }
+
+void population::print_stats_var() const
+{
+	// var of the average
+}
+
 
 void population::print_stats_header() const
 {

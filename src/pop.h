@@ -19,12 +19,11 @@
 #define POP_H
 
 #include <vector>
+#include <map>
 #include <cmath>
 
 class population;
 class individual;
-
-//typedef size_t gene;
 
 struct gene {
 	gene() : a((size_t)-1), par((size_t)-1), gpar((size_t)-1) { }
@@ -141,8 +140,10 @@ public:
 	inline size_t get_width() const { return width; }
 	inline size_t get_height() const { return height; }
 	
-	void print_stats(size_t g) const;
+	void print_stats(size_t g);
 	void print_stats_header() const;
+	void print_stats_avg() const;
+	void print_stats_var() const;
 	
 protected:
 	indy_vec inds;
@@ -159,5 +160,7 @@ protected:
 	size_t gmut;
 	size_t sample_gen;
 	size_t sample_size;
+	
+	std::vector<double> sum_stats;
 };
 #endif
