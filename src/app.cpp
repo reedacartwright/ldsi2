@@ -115,7 +115,7 @@ int app::run()
 		return EXIT_SUCCESS;
 	}
 		
-	if(arg.rand_seed == 0)
+	while(arg.rand_seed == 0)
 		arg.rand_seed = rand_seed();
 	set_rand_seed(arg.rand_seed);
 	std::cerr << "Simulating with seed " << arg.rand_seed << endl;
@@ -131,7 +131,8 @@ int app::run()
 	pop.initialize(arg.size, arg.size, arg.markers, arg.ini_num);
 	pop.params(arg.mu, arg.seed, arg.pollen, ckey);
 	pop.stat_params(arg.sample, arg.step);
-	pop.evolve(static_cast<size_t>(arg.time*2.0*arg.size*arg.size+1.0));
+	pop.evolve(static_cast<size_t>(arg.time*2.0*arg.size*arg.size+0.5),
+		static_cast<size_t>(arg.burn*2.0*arg.size*arg.size+0.5));
 	
 	return EXIT_SUCCESS;
 }

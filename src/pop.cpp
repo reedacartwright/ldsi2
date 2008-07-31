@@ -25,6 +25,8 @@
 
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
+#include <gsl/gsl_sf_psi.h>
+#include <gsl/gsl_roots.h>
 #include <cmath>
 #include <cfloat>
 #include <utility>
@@ -126,7 +128,17 @@ void population::params(double u, double s, double p, size_t c) {
 		gmut = myrand.geometric(pmut);
 }
 
-void population::evolve(size_t g) {
+void population::evolve(size_t g, size_t b) {
+	print_stats_header();
+	for(size_t gg=0;gg<b;++gg) {
+		for(size_t y=0;y<height;++y) {
+			for(size_t x=0;x<width;++x) {
+				step(x,y);
+			}
+		}
+		// swap is faster than copy
+		std::swap(inds_buf, inds);
+	}
 	for(size_t gg=0;gg<g;++gg) {
 		for(size_t y=0;y<height;++y) {
 			for(size_t x=0;x<width;++x) {
@@ -136,7 +148,7 @@ void population::evolve(size_t g) {
 		// swap is faster than copy
 		std::swap(inds_buf, inds);
 		if(gg%sample_gen == 0)
-			printstats(gg);
+			print_stats(b+gg);
 	}
 }
 
@@ -150,23 +162,24 @@ inline location dispersal(size_t x, size_t y, double mu) {
 }
 
 void population::step(size_t x, size_t y) {
-	individual &off = get_buf(x,y);
+	individual &off = get(x,y, true);
 	while(1) {
 		// pick a compatible pair
 		location momloc = dispersal(x,y,seed);
-		if(!is_valid(momloc.first,momloc.second))
+		// test if momloc is valid
+		if(!is_valid(momloc))
 			continue;
 		location dadloc = dispersal(momloc.first,momloc.second,pollen);
-		if((compat != NSI && dadloc == momloc) ||
-			!is_valid(dadloc.first,dadloc.second))
+		// test if dadloc is valid by itself and paired with mom
+		if(!is_valid(dadloc) || !is_valid(momloc,dadloc))
 			continue;
-		individual &mom = get(momloc.first,momloc.second);
-		individual &dad = get(dadloc.first,dadloc.second);
+		individual &mom = get(momloc);
+		individual &dad = get(dadloc);
 
-		// check for potential compatibility
+		// check for compatibility based on mom and dad genotypes
 		if(!is_valid(mom,dad))
 			continue;
-		// generate pollen and check compatibility
+		// generate pollen and check compatibility with mom
 		dad.gamete(off.hdad);
 		mutate(off.hdad);
 		if(!is_valid(mom,off.hdad))
@@ -208,7 +221,86 @@ inline T sq(const T& t) {
 	return t*t;
 }
 
-void population::printstats(size_t g) const
+struct theta_kn_params {
+	theta_kn_params(double kk, double nn) : k(kk), n(nn) { }
+	double k;
+	double n;
+};
+
+double theta_kn(double th, void *params)
+{
+	theta_kn_params *p = static_cast<theta_kn_params*>(params);
+	return th*(gsl_sf_psi_n(0,p->n+th)-gsl_sf_psi_n(0,th))-p->k;
+}
+
+double theta_kn_deriv(double th, void *params)
+{
+	theta_kn_params *p = static_cast<theta_kn_params*>(params);
+	return gsl_sf_psi_n(0,p->n+th)-gsl_sf_psi_n(0,th) +
+			th*(gsl_sf_psi_n(1,p->n+th)-gsl_sf_psi_n(1,th));
+}
+
+void theta_kn_fdf(double th, void *params, double *y, double *dy)
+{
+	theta_kn_params *p = static_cast<theta_kn_params*>(params);
+	double d = gsl_sf_psi_n(0,p->n+th)-gsl_sf_psi_n(0,th);
+	*y = th*d-p->k;
+	*dy = d+th*(gsl_sf_psi_n(1,p->n+th)-gsl_sf_psi_n(1,th));
+}
+
+class theta_kn_solver {
+public:
+	theta_kn_solver(double kk, double nn) :
+		params(kk,nn)
+	{
+		T = gsl_root_fdfsolver_newton;
+		s = gsl_root_fdfsolver_alloc(T);
+		FDF.f = &theta_kn;
+		FDF.df = &theta_kn_deriv;
+		FDF.fdf = &theta_kn_fdf;
+		FDF.params = &params;
+	}
+	~theta_kn_solver() {
+		gsl_root_fdfsolver_free(s);
+	}
+	
+	double operator()(double x, int miter=100) {
+		if(-DBL_EPSILON < params.k-1.0 && params.k-1.0 < DBL_EPSILON)
+			return 0.0;
+		gsl_root_fdfsolver_set(s, &FDF, x);
+		int iter = 0;
+		do {
+			iter++;
+			status = gsl_root_fdfsolver_iterate(s);
+			double x0 = x;
+			x = gsl_root_fdfsolver_root(s);
+			status = gsl_root_test_delta(x, x0, 0, 1e-7);
+		} while(status == GSL_CONTINUE && iter < miter);
+		return x;
+	}
+	
+	theta_kn_params params;
+	int status;
+	
+	const gsl_root_fdfsolver_type *T;
+	gsl_root_fdfsolver *s;
+	gsl_function_fdf FDF;
+};
+
+/*
+var of a single theta_ko est is about 
+
+t / (  PolyGamma[0,n+t]-PolyGamma[0,t]
+    + t*(PolyGamma[1,n+t]-PolyGamma[1,t])
+    )
+
+n is the number of sequences
+
+Calculated from Fisher's Information
+
+*/
+
+void population::print_stats(size_t g) const
 {
 	// per locus:
 	//   number of alleles
@@ -221,9 +313,11 @@ void population::printstats(size_t g) const
 
 	vector<size_t> v;
 	myrand.uniform_urn(uM, sample_size, v);
+	double s2 = 0.0;
 	for(size_t m = 0; m < markers; ++m)
 	{
 		popstats stats;
+
 		foreach(size_t p, v)
 		{
 			size_t x = p%get_width();
@@ -245,14 +339,43 @@ void population::printstats(size_t g) const
 		foreach(popstats::alleledb::value_type &vv, stats.num_allele) {
 			dt += sq(vv.second);
 		}
+		if(m == 0)
+			s2 = 0.5*stats.sum_dist2/M;
+
+		double Ke = M*M/dt;
+		double theta_ke = Ke-1.0;
+		double N_ke = 0.25*theta_ke/mu;
+		double Nb_ke = 4.0*M_PI*s2*N_ke/(uM);
 		
-		cout << join("\t", g, m, dt/(M*M),
-			stats.num_homo/(1.0*sample_size),
-			stats.num_ibd/(1.0*sample_size),
-			M*M/dt, stats.num_allele.size(),
-			0.5*stats.sum_dist2/M
-		) << endl;
+		double Ko = (double)stats.num_allele.size();
+		theta_kn_solver ts(Ko, M);
+		// could fail to converged, ignore--tehe.
+		double theta_ko = ts(Ke-0.9);
+		double N_ko = 0.25*theta_ko/mu;
+		double Nb_ko = 4.0*M_PI*s2*N_ko/(uM);	
+
+		cout << join("\t", g, m, stats.num_ibd/(1.0*sample_size), Ko, Ke, s2) 
+		     << "\t" << join("\t", theta_ko, N_ko, Nb_ko)
+	         << "\t" << join("\t", theta_ke, N_ke, Nb_ke)
+		     << endl;
 	}
+}
+
+void population::print_stats_header() const
+{
+	cout << "Gen" "\t"
+	        "Mark" "\t"
+	        "Ibd" "\t"
+	        "Ko" "\t"
+	        "Ke" "\t"
+	        "S2" "\t"
+	        "ThKo" "\t"
+	        "NKo" "\t"
+	        "NbKo" "\t"
+	        "ThKe" "\t"
+	        "NKe" "\t"
+	        "NbKe"
+	     << endl;
 }
 
 /****************************************************************************
