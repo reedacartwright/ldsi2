@@ -129,16 +129,13 @@ public:
 		return !(compat == GSI && (h[0] == m.hdad[0] || h[0] == m.hmom[0]));
 	}
 	inline bool is_valid(const individual &m, const individual &d) const {
-		if(compat == SSI)
-			return (d.hdad[0] == m.hdad[0] ||
-		 	        d.hdad[0] == m.hmom[0] ||
-				    d.hmom[0] == m.hdad[0] ||
-				    d.hmom[0] == m.hmom[0] );
-		else if(compat == BSI)
-			return (d.hdad[0].dom >= d.hmom[0].dom) ?
-				(d.hdad[0] == m.hdad[0] || d.hdad[0] == m.hmom[0]) :
-				(d.hmom[0] == m.hdad[0] || d.hmom[0] == m.hmom[0]) ;
-		return true;
+		return
+		(compat == SSI) ?  (d.hdad[0] != m.hdad[0] && d.hdad[0] != m.hmom[0] &&
+				            d.hmom[0] != m.hdad[0] && d.hmom[0] != m.hmom[0]) :
+		(compat == BSI) ? ((d.hdad[0].dom >= d.hmom[0].dom) ?
+				           (d.hdad[0] != m.hdad[0] && d.hdad[0] != m.hmom[0]) :
+				           (d.hmom[0] != m.hdad[0] && d.hmom[0] != m.hmom[0])):
+		true;
 	}
 	
 	void mutate(haplotype &h);
