@@ -70,6 +70,7 @@ SET(CPACK_SOURCE_IGNORE_FILES
   "CMakeCache.txt"
   "CPack.*Config.cmake"
   "cmake_install.cmake"
+  "_CPack_Packages"
 )
 
 IF(WIN32 AND NOT UNIX)
@@ -82,6 +83,7 @@ IF(WIN32 AND NOT UNIX)
   SET(CPACK_NSIS_URL_INFO_ABOUT "http:\\\\\\\\scit.us\\\\")
   SET(CPACK_NSIS_CONTACT "reed@scit.us")
   SET(CPACK_NSIS_MODIFY_PATH ON)
+  SET(CPACK_STRIP_FILES "bin/ldsi.exe")
 ELSE(WIN32 AND NOT UNIX)
   SET(CPACK_GENERATOR "TGZ")
   SET(CPACK_SOURCE_GENERATOR "TGZ") 
