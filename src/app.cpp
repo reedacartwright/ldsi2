@@ -99,7 +99,7 @@ app::app(int argc, char* argv[]) : desc("Allowed Options")
 }
 
 // must be the same as the enum in population
-const char *sikeys[] = {"nsi","psi","gsi","ssi"};
+const char *sikeys[] = {"nsi","psi","gsi","ssi", "bsi"};
 
 int app::run()
 {
@@ -123,7 +123,7 @@ int app::run()
 	size_t ckey = key_switch(arg.compat.c_str(), sikeys);
 	if(ckey == (size_t)-1)
 	{
-		CERROR("Invalid compatibility switch '" << arg.compat << "'.  Use (psi|nsi|gsi|ssi).");
+		CERROR("Invalid compatibility switch '" << arg.compat << "'.  Use (psi|nsi|gsi|ssi|bsi).");
 		return EXIT_FAILURE;
 	}
 	

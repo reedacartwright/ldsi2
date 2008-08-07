@@ -32,6 +32,7 @@ struct gene {
 	// meta info;
 	size_t par;
 	size_t gpar;
+	size_t dom;
 
 	bool operator == (const gene & g) const {
 		return a == g.a;
@@ -75,7 +76,7 @@ public:
 
 class population {
 public:
-	enum {NSI=0,PSI=1,GSI=2,SSI=3};
+	enum {NSI=0,PSI=1,GSI=2,SSI=3,BSI=4};
 	typedef std::vector<individual> indy_vec;
 	population() { }
 
@@ -122,17 +123,22 @@ public:
 		return (loc.first < width && loc.second < height);
 	}
 	inline bool is_valid(const location &loc1, const location &loc2 ) const {
-		return !((compat == PSI || compat == SSI) && loc1 == loc2);
+		return !((compat == PSI || compat == SSI || compat == BSI) && loc1 == loc2);
 	}
 	inline bool is_valid(const individual &m, const haplotype &h) const {
 		return !(compat == GSI && (h[0] == m.hdad[0] || h[0] == m.hmom[0]));
 	}
 	inline bool is_valid(const individual &m, const individual &d) const {
-		return !(compat == SSI && (
-				d.hdad[0] == m.hdad[0] ||
-		        d.hdad[0] == m.hmom[0] ||
-			    d.hmom[0] == m.hdad[0] ||
-				d.hmom[0] == m.hmom[0]));
+		if(compat == SSI)
+			return (d.hdad[0] == m.hdad[0] ||
+		 	        d.hdad[0] == m.hmom[0] ||
+				    d.hmom[0] == m.hdad[0] ||
+				    d.hmom[0] == m.hmom[0] );
+		else if(compat == BSI)
+			return (d.hdad[0].dom >= d.hmom[0].dom) ?
+				(d.hdad[0] == m.hdad[0] || d.hdad[0] == m.hmom[0]) :
+				(d.hmom[0] == m.hdad[0] || d.hmom[0] == m.hmom[0]) ;
+		return true;
 	}
 	
 	void mutate(haplotype &h);
@@ -142,8 +148,6 @@ public:
 	
 	void print_stats(size_t g);
 	void print_stats_header() const;
-	void print_stats_avg() const;
-	void print_stats_var() const;
 	
 protected:
 	indy_vec inds;
@@ -161,6 +165,5 @@ protected:
 	size_t sample_gen;
 	size_t sample_size;
 	
-	std::vector<double> sum_stats;
 };
 #endif

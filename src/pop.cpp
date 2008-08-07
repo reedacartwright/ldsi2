@@ -15,7 +15,7 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.   *
  ****************************************************************************/
 
-// src/ldsi -n 10 -m 4 -k 6 -u 1e-4 -p 2 -s 1 -c ssi -t 10
+// src/ldsi -n 50 -m 15 -k 20 -u 1e-5 -p 6 -s 1.5 -c psi -t 1000 -b 10 -x 500 -y 2500  > p06.tsv
 
 #define _USE_MATH_DEFINES
 
@@ -103,8 +103,6 @@ void set_rand_seed(unsigned int u) { myrand.seed(u); }
  * class population                                                         *
  ****************************************************************************/
 
-enum {sN, sIbd, sKo, sF, sS2, sSize};
-
 void population::initialize(size_t w, size_t h, size_t m, size_t k)
 {
 	if(k < 1) k = 1;
@@ -143,7 +141,6 @@ void population::evolve(size_t g, size_t b) {
 	}
 	//cerr << "Collection phase of " << g << " generations..." << endl;
 	print_stats_header();
-	sum_stats.assign(markers*sSize, 0.0);
 	for(size_t gg=0;gg<g;++gg) {
 		for(size_t y=0;y<height;++y) {
 			for(size_t x=0;x<width;++x) {
@@ -155,7 +152,6 @@ void population::evolve(size_t g, size_t b) {
 		if(gg%sample_gen == 0)
 			print_stats(b+gg);
 	}
-	print_stats_avg();
 }
 
 inline location dispersal(size_t x, size_t y, double mu) {
@@ -186,6 +182,7 @@ void population::step(size_t x, size_t y) {
 		if(!is_valid(mom,dad))
 			continue;
 		// generate pollen and check compatibility with mom
+		// use off.hdad as buffer
 		dad.gamete(off.hdad);
 		mutate(off.hdad);
 		if(!is_valid(mom,off.hdad))
@@ -208,6 +205,8 @@ void population::mutate(haplotype &h)
 	gmut = myrand.geometric(pmut);
 	size_t pos = myrand.uniform(h.size());
 	h[pos] = mallele++;
+	if(compat == BSI && pos == 0)
+		h[pos].dom = myrand.uniform();
 }
 
 template<typename T>
@@ -307,12 +306,6 @@ struct popstats {
 
 void population::print_stats(size_t g)
 {
-	// per locus:
-	//   number of alleles
-	//   effective number of alleles
-	//   true IBD?  over two generations?
-	// per ind:
-	//   s^2
 	size_t uM = get_height()*get_width();
 	double M = 2.0*sample_size;
 
@@ -364,57 +357,8 @@ void population::print_stats(size_t g)
 		     << "\t" << join("\t", theta_ko, N_ko, Nb_ko)
 	         << "\t" << join("\t", theta_ke, N_ke, Nb_ke)
 		     << endl;
-		
-		size_t o = m*sSize;
-		sum_stats[o+sN]   += 1.0;
-		sum_stats[o+sIbd] += ibd;
-		sum_stats[o+sKo]  += Ko;
-		sum_stats[o+sF]  += f;
-		sum_stats[o+sS2]  += s2;
 	}
 }
-
-//enum {sN, sIbd, sKo, sKe, sS2, sSize}
-
-void population::print_stats_avg() const
-{
-	// parameter ests will be f(avg(a)) not avg(f(a))
-	size_t uM = get_height()*get_width();
-	double M = 2.0*sample_size;
-		
-	for(size_t m = 0; m < markers; ++m)
-	{
-		size_t o = m*sSize;
-		double N = sum_stats[o+sN];
-		
-		double s2 = sum_stats[o+sS2]/N;
-		double ibd = sum_stats[o+sIbd]/N;
-		double f = sum_stats[o+sF]/N;
-		double Ke = 1.0/f;
-		double theta_ke = Ke-1.0;
-		double N_ke = 0.25*theta_ke/mu;
-		double Nb_ke = 4.0*M_PI*s2*N_ke/(uM);
-		
-		double Ko = sum_stats[o+sKo]/N;;
-		theta_kn_solver ts(Ko, M);
-		// could fail to converged, ignore--tehe.
-		double theta_ko = ts(Ke-0.9);
-		double N_ko = 0.25*theta_ko/mu;
-		double Nb_ko = 4.0*M_PI*s2*N_ko/(uM);	
-				
-		cout << join("\t", "Avg", m, ibd, Ko, Ke, s2) 
-		     << "\t" << join("\t", theta_ko, N_ko, Nb_ko)
-	         << "\t" << join("\t", theta_ke, N_ke, Nb_ke)
-		     << endl;
-	}
-	
-}
-
-void population::print_stats_var() const
-{
-	// var of the average
-}
-
 
 void population::print_stats_header() const
 {
