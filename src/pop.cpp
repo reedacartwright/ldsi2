@@ -67,6 +67,7 @@ public:
 	inline int_type uniform() { return get(); }
 	inline int_type uniform(int_type max) { return gsl_rng_uniform_int(r, max); } // [0,max)
 	inline real_type uniform01() { return gsl_rng_uniform(r); }
+	inline bool boolean(double p) { return (uniform01() < p); }
 	inline int_type poisson(real_type mu) { return gsl_ran_poisson(r,mu); }
 	inline real_type exponential(real_type mu) { return gsl_ran_exponential(r,mu); }
 	inline int_type geometric(real_type p) { return gsl_ran_geometric(r,p); }
@@ -113,19 +114,30 @@ void population::initialize(size_t w, size_t h, size_t m, size_t k)
 	inds.clear();
 	inds.reserve(width*height);
 	individual I(markers);
+	
+	// Initialize Dominance
+	vector<double> dbsi;
+	for(size_t kk=0;kk<k&&compat == BSI;++k)
+		dbsi.push_back(myrand.uniform());
+	
 	for(size_t i=0;i<width*height;++i) {
 		I.id = 2*i;
 		I.randomize(k);
+		if(compat == BSI) {
+			I.hdad[0].dom = dbsi[I.hdad[0]];
+			I.hmom[0].dom = dbsi[I.hmom[0]];
+		}
 		inds.push_back(I);
-		I.randomize(k);
-		inds_buf.push_back(I);
 	}
+	inds_buf.assign(inds.begin(), inds.end());
 }
 
-void population::params(double u, double s, double p, size_t c) {
-		mu = u; seed = s; pollen = p; compat = c;
-		pmut = 1.0-std::pow(1-mu, (int)markers);
+void population::params(double u, double U, double s, double p, size_t c) {
+		mu = u; smu = U; seed = s; pollen = p; compat = c;
+		pmut = 1.0-std::pow(1.0-mu, (int)(markers-1))*(1.0-smu);
+		psmut = smu/(smu+(markers-1)*mu);
 		gmut = myrand.geometric(pmut);
+		
 }
 
 void population::evolve(size_t g, size_t b) {
@@ -203,7 +215,9 @@ void population::mutate(haplotype &h)
 	if(--gmut > 0)
 		return;
 	gmut = myrand.geometric(pmut);
-	size_t pos = myrand.uniform(h.size());
+	size_t pos = 0;
+	if(!myrand.boolean(psmut))
+		pos = 1+myrand.uniform(h.size()-1);
 	h[pos] = mallele++;
 	if(compat == BSI && pos == 0)
 		h[pos].dom = myrand.uniform();
@@ -340,6 +354,7 @@ void population::print_stats(size_t g)
 		if(m == 0)
 			s2 = 0.5*stats.sum_dist2/M;
 		double ibd = stats.num_ibd/(1.0*sample_size);
+		double hibd = stats.num_homo/(1.0*sample_size);
 		double f = dt/sq(M);
 		double Ke = 1.0/f;
 		double theta_ke = Ke-1.0;
@@ -353,7 +368,7 @@ void population::print_stats(size_t g)
 		double N_ko = 0.25*theta_ko/mu;
 		double Nb_ko = 4.0*M_PI*s2*N_ko/(uM);	
 				
-		cout << join("\t", g, m, ibd, Ko, Ke, s2) 
+		cout << join("\t", g, m, ibd, hibd, Ko, Ke, s2) 
 		     << "\t" << join("\t", theta_ko, N_ko, Nb_ko)
 	         << "\t" << join("\t", theta_ke, N_ke, Nb_ke)
 		     << endl;
@@ -365,6 +380,7 @@ void population::print_stats_header() const
 	cout << "Gen" "\t"
 	        "Mark" "\t"
 	        "Ibd" "\t"
+	        "Hoz" "\t"
 	        "Ko" "\t"
 	        "Ke" "\t"
 	        "S2" "\t"

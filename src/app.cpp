@@ -129,7 +129,9 @@ int app::run()
 	
 	population pop;
 	pop.initialize(arg.size, arg.size, arg.markers, arg.ini_num);
-	pop.params(arg.mu, arg.seed, arg.pollen, ckey);
+	if(arg.smu == -1.0)
+		arg.smu = arg.mu;
+	pop.params(arg.mu, arg.smu, arg.seed, arg.pollen, ckey);
 	pop.stat_params(arg.sample, arg.step);
 	pop.evolve(static_cast<size_t>(arg.time*2.0*arg.size*arg.size+0.5),
 		static_cast<size_t>(arg.burn*2.0*arg.size*arg.size+0.5));

@@ -26,7 +26,7 @@ class population;
 class individual;
 
 struct gene {
-	gene() : a((size_t)-1), par((size_t)-1), gpar((size_t)-1) { }
+	gene() : a((size_t)-1), par((size_t)-1), gpar((size_t)-1), dom((size_t)-1) { }
 	// true info
 	size_t a;
 	// meta info;
@@ -81,7 +81,7 @@ public:
 	population() { }
 
 	void initialize(size_t w, size_t h, size_t m, size_t k);
-	void params(double u, double s, double p, size_t c);
+	void params(double u, double U, double s, double p, size_t c);
 	inline void stat_params(size_t x, size_t y) {
 		sample_size = x;
 		sample_gen = y;
@@ -153,11 +153,13 @@ protected:
 	size_t height;
 	size_t markers;
 	double mu;
+	double smu;
 	double seed;
 	double pollen;
 	size_t compat;
 	size_t mallele;
 	double pmut;
+	double psmut;
 	size_t gmut;
 	size_t sample_gen;
 	size_t sample_size;
