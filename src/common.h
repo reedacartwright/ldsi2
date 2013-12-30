@@ -48,6 +48,7 @@
 #include <vector>
 #include <iterator>
 #include <ctime>
+#include <cstring>
 
 #include "join.h"
 

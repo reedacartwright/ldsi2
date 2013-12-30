@@ -323,7 +323,7 @@ void population::print_stats(size_t g)
 	size_t uM = get_height()*get_width();
 	double M = 2.0*sample_size;
 
-	vector<size_t> v;
+	vector<gslrand::int_type> v;
 	myrand.uniform_urn(uM, sample_size, v);
 	double s2 = 0.0;
 	for(size_t m = 0; m < markers; ++m)

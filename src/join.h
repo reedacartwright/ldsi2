@@ -193,7 +193,7 @@ struct join_t : public detail::base_t<SP>
 	inline std::basic_ostream<CharT, Traits>&
 		operator() (std::basic_ostream<CharT, Traits>& os) const
 	{
-		print_tuple(os, tt);
+		inherited::print_tuple(os, tt);
 		return os;
 	}
 };
